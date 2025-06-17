@@ -1,13 +1,14 @@
 // PathKit - Effortless path operations
 
-#if os(Linux)
-import Glibc
-
-let system_glob = Glibc.glob
-#else
+#if os(macOS) || os(iOS)
 import Darwin
-
 let system_glob = Darwin.glob
+#elseif canImport(Glibc)
+import Glibc
+let system_glob = Glibc.glob
+#elseif canImport(Musl)
+import Musl
+let system_glob = Musl.glob
 #endif
 
 import Foundation
@@ -595,14 +596,21 @@ extension Path {
       globfree(&gt)
       free(cPattern)
     }
-
-    let flags = GLOB_TILDE | GLOB_BRACE | GLOB_MARK
-    if system_glob(cPattern, flags, nil, &gt) == 0 {
-#if os(Linux)
-      let matchc = gt.gl_pathc
+      
+#if canImport(Musl)
+      let flags = GLOB_TILDE | GLOB_MARK
 #else
-      let matchc = gt.gl_matchc
+      let flags = GLOB_TILDE | GLOB_BRACE | GLOB_MARK
 #endif
+
+    if system_glob(cPattern, flags, nil, &gt) == 0 {
+        
+#if os(macOS) || os(iOS)
+        let matchc = gt.gl_matchc
+#elseif canImport(Glibc) || canImport(Musl)
+        let matchc = gt.gl_pathc
+#endif
+        
       return (0..<Int(matchc)).compactMap { index in
         if let path = String(validatingUTF8: gt.gl_pathv[index]!) {
           return Path(path)
